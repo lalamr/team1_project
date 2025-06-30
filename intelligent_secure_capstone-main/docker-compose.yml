@@ -1,0 +1,109 @@
+services:
+  mysql:
+    image: mysql:8.1.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: ai_security
+      MYSQL_USER: ai_writer
+      MYSQL_PASSWORD: 1234
+    networks:
+      mysql-net:
+        ipv4_address: 172.30.0.10  # 고정 IP
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  ai-detector1:
+    build: ./ai_server
+    container_name: ai-detector1
+    depends_on:
+      - mysql
+    cap_add:
+      - NET_ADMIN
+    networks:
+      custom-net:
+        ipv4_address: 172.19.0.3
+      mysql-net:
+    tty: true
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./ai_server:/app
+  
+  ai-detector2:
+    build: ./ai_server
+    container_name: ai-detector2
+    depends_on:
+      - mysql
+    cap_add:
+      - NET_ADMIN
+    tty: true
+    networks:
+      custom-net:
+        ipv4_address: 172.19.0.4
+      mysql-net:
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./ai_server:/app
+
+  ai-detector3:
+    build: ./ai_server
+    container_name: ai-detector3
+    depends_on:
+      - mysql
+    cap_add:
+      - NET_ADMIN
+    tty: true
+    networks:
+      custom-net:
+        ipv4_address: 172.19.0.5
+      mysql-net:
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./ai_server:/app
+
+  snort3:
+    build: ./ips
+    container_name: ips
+    cap_add:
+      - NET_ADMIN
+    stdin_open: true
+    tty: true
+    network_mode: host
+    volumes:
+      - ./ips/snort/snort.lua:/usr/local/snort/etc/snort/snort.lua
+      - ./ips/snort/rules:/usr/local/snort/etc/snort/rules
+      - ./ips/ips_updater.py:/updater/ips_updater.py
+      - ./ips/entrypoint.sh:/entrypoint.sh
+      - ./ips/log:/var/log/snort
+
+
+  kali:
+    image: borygashill608/kali-with-tools
+    container_name: kali
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./attack_test.sh:/attack_test.sh
+    network_mode: host
+    entrypoint: ["/bin/bash"]
+
+  
+volumes:
+  mysql-data:
+
+networks:
+  custom-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
+
+  mysql-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
